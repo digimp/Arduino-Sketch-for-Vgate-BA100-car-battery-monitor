@@ -36,6 +36,9 @@ With these tools I've found out that changing voltage values of the power supply
 
 #### <a name="Scripts"><a/>Scripts
 
+Arduino sketch enclosed uses BLE library since NimBLE library doesn't work on the Esp32C3 Supermini that I used for this project. The sketch has been enriched with diagnostic parts to have more details on the functionality of the system.
+In my project the goal was to add a sensor on my home assistant instance, where the hexadecimal raw data coming from Esp32 could be converted to a voltage values. In a first step I adopted a conversion using the spreadsheet data in a numeric form to the corresponding voltage values.
+
 
 
 
