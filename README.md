@@ -10,6 +10,9 @@
 
 
 
+
+
+
 #### <a name="Introduction"><a/>Introduction
 
 VaGate BA100 is a BLE device that sends to a smartphone app hexadecimal data that app converts to Volts values. So you cannot read directly volts values 
