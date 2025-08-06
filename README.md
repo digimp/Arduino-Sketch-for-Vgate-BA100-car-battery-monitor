@@ -41,6 +41,12 @@ In my project the goal was to add a sensor on my home assistant instance, where 
 
 <img src="https://github.com/user-attachments/assets/73caa2bc-0c64-47a8-8ef3-320c89e8cf9a" width="200">
 
+Update: Here below is the result of the formula built to align the voltage values to the reference table. You can find the formula on the codes area.
+
+<img src="https://github.com/user-attachments/assets/aa3cc17e-857b-4972-b1e1-bdfa290562de" width="250">
+
+
+
 
 
 
