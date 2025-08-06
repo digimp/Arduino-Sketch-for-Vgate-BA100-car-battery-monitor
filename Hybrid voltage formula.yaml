@@ -1,0 +1,19 @@
+sensor:
+      - name: "Battery Voltage Formula"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        state: >
+         {% set raw = states('input_text.raw_battery_data') %}
+         {% if raw is not none and raw != 'unknown' and raw != 'unavailable' %}
+           {% set parts = raw.split('-') %}
+           {% if parts | length >=3 %}
+             {% set byte2 = parts[1] | int(base=16) | default(0) %}
+             {% set byte3 = parts[2] | int(base=16) | default(0) %}
+             {% if byte2 == 2 %}
+               {{ (8.529 + byte3 * 0.015136) | round(3) }}
+             {% elif byte2 == 3 %}
+               {{ (12.414 + byte3 * 0.01485 + byte3**2 * 0.000018) | round(3) }}
+             {% else %}unknown_format{% endif %}
+           {% else %}error_formato{% endif %}
+         {% else %}data_not_available{% endif %}
