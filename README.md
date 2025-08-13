@@ -47,6 +47,8 @@ Here below is the result of the formula built to align the voltage values to the
 
 <img src="https://github.com/user-attachments/assets/aa3cc17e-857b-4972-b1e1-bdfa290562de" width="250">
 
+
+
 Update #2
 
 Last script uploaded , named BLE_battery_diagnostic_n2_resilient_HS. It was created using heap saving and recovery measures to avoid excessive fragmentation of heap memory into small blocks, especially when the BLE is not connected. Here is values of heap obtained with this sketch.
