@@ -3,7 +3,7 @@
 #### 1. [INTRODUCTION](#Introduction)
 #### 2. [TOOLS](#Tools)
 #### 3. [SCRIPTS](#Scripts)
-#### 4. [UPDATE](#Update)
+#### 4. [UPDATES](#Updates)
 
 
 
@@ -34,12 +34,13 @@ With these tools I've found out that changing voltage values of the power supply
 
 #### <a name="Scripts"><a/>Scripts
 
-Arduino sketch enclosed uses BLE library since NimBLE library doesn't work on the Esp32C3 Supermini that I used for this project. The sketch has been enriched with diagnostic parts to have more details on the functionality of the system.
+Arduino sketch enclosed uses BLE library since NimBLE library doesn't work on the Esp32C3 Supermini that I used for this project. Be careful, these sketches are tested with the esp32 core by espressif v 3.2.1. They will not work with other versions (i.e. 3.3.0).
+The sketches has been enriched with diagnostic parts to have more details on the functionality of the system.
 In my project the goal was to add a sensor on my home assistant instance, where the hexadecimal raw data coming from Esp32 could be converted to a voltage values. In a first step I adopted a conversion using the spreadsheet data in a numeric form to the corresponding voltage values. Screenshot below is the results shown in mini graph card in home assistant. I'm currently working on a sketch version low heap consuming. I'll update the code when ready.
 
 <img src="https://github.com/user-attachments/assets/73caa2bc-0c64-47a8-8ef3-320c89e8cf9a" width="200">
 
-#### <a name="Update"><a/>Update
+#### <a name="Updates"><a/>Update #1
 
 Here below is the result of the formula built to align the voltage values to the reference table. You can find the formula on the codes area.
 
