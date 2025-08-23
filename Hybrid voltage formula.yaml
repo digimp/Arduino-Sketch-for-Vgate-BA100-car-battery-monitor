@@ -13,7 +13,8 @@ sensor:
              {% if byte2 == 2 %}
                {{ (8.529 + byte3 * 0.015136) | round(3) }}
              {% elif byte2 == 3 %}
-               {{ (12.414 + byte3 * 0.01485 + byte3**2 * 0.000018) | round(3) }}
+               {{ (12.414 + byte3 * 0.01485 + byte3**2 * 0.000017) | round(3) }}
              {% else %}unknown_format{% endif %}
            {% else %}error_formato{% endif %}
          {% else %}data_not_available{% endif %}
+
