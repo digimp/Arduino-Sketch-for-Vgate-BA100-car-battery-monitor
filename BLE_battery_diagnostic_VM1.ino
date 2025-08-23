@@ -1,4 +1,4 @@
-#include <BLEDevice.h>
+#include <BLEDevice.h> 
 #include <BLEUtils.h>
 #include <BLEClient.h>
 #include <WiFi.h>
@@ -9,17 +9,17 @@
 
 // ---------- WiFi / MQTT ----------
 const char* ssid       = "SSID";
-const char* password   = "psw";
-const char* mqtt_server= "192.168.1.xxx"; // your mqtt broker ip 
-const char* mqtt_user  = "username";
-const char* mqtt_pass  = "psw";
+const char* password   = "PSW";
+const char* mqtt_server= "192.168.1.XXX";
+const char* mqtt_user  = "mqtt_user";
+const char* mqtt_pass  = "PSW";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // ---------- BLE target ----------
-static const char* TARGET_MAC = "00:00:00:C3:72:68"; // your BA100 mac
-static BLEUUID serviceUUID("0000ae00-0000-1000-8000-00805f9b34fb"); // for service and char check your nRF app
+static const char* TARGET_MAC = "00:00:00:C3:72:68"; // BA100
+static BLEUUID serviceUUID("0000ae00-0000-1000-8000-00805f9b34fb");
 static BLEUUID charUUID   ("0000ae02-0000-1000-8000-00805f9b34fb");
 
 BLEClient*  pClient = nullptr;
@@ -39,21 +39,43 @@ unsigned long lastBleTime = 0;
 
 // Retry pacing / recovery
 static unsigned long nextBleTryMs = 0;
-static uint16_t bleFailStreak = 0;
+// static uint16_t bleFailStreak = 0; // (non usato)
 
-// ---------- Heap monitor (ADD) ----------
-static uint32_t heapMinEver = UINT32_MAX;              // traccia il minimo storico (se utile)
-static const uint32_t HEAP_LARGEST_GUARD = 16 * 1024;  // soglia largest block (16KB)
+// ---------- Heap monitor ----------
+static uint32_t heapMinEver = UINT32_MAX;              // traccia il minimo storico
+static const uint32_t HEAP_LARGEST_GUARD = 16 * 1024;  // soglia minima largest block (16KB)
+
+// ---------- Wi-Fi watchdog (ADD) ----------
+static unsigned long nextWiFiCheck = 0;
+static const unsigned long WIFI_CHECK_MS = 5000; // 5s
+
+static void ensureWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  Serial.print("📶 Reconnect WiFi");
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(ssid, password);
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+    delay(300); Serial.print(".");
+  }
+  Serial.println(WiFi.status() == WL_CONNECTED ? " ✅" : " ❌");
+}
+
+// ---------- BLE long-away refresh (ADD) ----------
+static unsigned long lastBleRefresh = 0;
+static const unsigned long BLE_REFRESH_COOLDOWN = 10UL * 60UL * 1000UL; // 10 min
 
 // ---------- Client callbacks ----------
 class MyClientCallbacks : public BLEClientCallbacks {
   void onConnect(BLEClient* c) override {
     (void)c;
-  
   }
   void onDisconnect(BLEClient* c) override {
     (void)c;
     connected = false;
+    nextBleTryMs = 0; // ritenta subito
     Serial.println("⚠️ Evento onDisconnect: link BLE caduto");
   }
 };
@@ -92,7 +114,7 @@ void notifyCallback(BLERemoteCharacteristic*, uint8_t* pData, size_t length, boo
 
   // payload "AA-BB-..."
   String payload;
-  payload.reserve(length * 3); // ADD: evita riallocazioni ripetute
+  payload.reserve(length * 3); // evita riallocazioni ripetute
   Serial.print("🔔 Notifica ricevuta: ");
   for (size_t i = 0; i < length; i++) {
     if (pData[i] < 0x10) Serial.print("0");
@@ -125,14 +147,48 @@ void notifyCallback(BLERemoteCharacteristic*, uint8_t* pData, size_t length, boo
   }
 }
 
-// Scan + connect via advertised device
+// ---------- Connessione BLE (priorità MAC diretto; scan breve fallback) ----------
 bool scanAndConnect() {
-  Serial.println("🔍 Scansione BLE in corso...");
+  // Mantieni MQTT vivo PRIMA di eventuale scan sincrono
+  client.loop();
+
+  // (1) Tentativo IMMEDIATO via MAC
+  if (pClient) { if (pClient->isConnected()) pClient->disconnect(); delete pClient; pClient = nullptr; }
+  pClient = BLEDevice::createClient();
+  static MyClientCallbacks cb;                 // (ADD) callback statico riusabile
+  pClient->setClientCallbacks(&cb);
+
+  BLEAddress addr(TARGET_MAC);
+  Serial.println("🔗 Connessione diretta via MAC...");
+  if (pClient->connect(addr)) {
+    Serial.println("✅ Connesso, ricerca servizio...");
+    BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
+    if (!pRemoteService) { Serial.println("❌ Servizio non trovato"); pClient->disconnect(); return false; }
+    pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
+    if (!pRemoteCharacteristic){ Serial.println("❌ Caratteristica non trovata"); pClient->disconnect(); return false; }
+    if (pRemoteCharacteristic->canNotify()) {
+      delay(120);
+      pRemoteCharacteristic->registerForNotify(notifyCallback);
+      Serial.println("📡 Notifiche abilitate (direct).");
+    } else {
+      Serial.println("❌ La caratteristica non dichiara notify");
+      pClient->disconnect();
+      return false;
+    }
+    connected = true;
+    lastBleTime = millis();
+    Serial.println("🟢 BLE pronto");
+    return true;
+  }
+
+  // (2) Fallback: scan (10s) + connect tramite advertised device
+  Serial.println("🔍 Scan BLE (10s) per advertised device...");
   BLEScan* pBLEScan = BLEDevice::getScan();
   pBLEScan->setActiveScan(true);
+  pBLEScan->setInterval(160);   // ~100ms
+  pBLEScan->setWindow(120);     // ~75ms
 
-  //
-  BLEScanResults* results = pBLEScan->start(10);
+  BLEScanResults* results = pBLEScan->start(10);  // Come nella diagnostic basica
   int n = results ? results->getCount() : 0;
   Serial.print("📡 Trovati "); Serial.print(n); Serial.println(" dispositivi BLE:");
 
@@ -142,27 +198,26 @@ bool scanAndConnect() {
 
   for (int i = 0; i < n; i++) {
     BLEAdvertisedDevice d = results->getDevice(i);
-    Serial.print(" - "); Serial.println(d.toString().c_str());
+    // Log minimale (evita flood): stampa solo il target o 1-2 righe
     if (d.getAddress().equals(targetAddr)) {
+      Serial.print(" - TARGET: "); Serial.println(d.toString().c_str());
       targetDev = d;
       found = true;
+      break;
     }
   }
-  pBLEScan->stop();
+  // (lasciato invariato: per evitare il warning, rimuovere lo stop)
+  // pBLEScan->stop();
   pBLEScan->clearResults();
 
   if (!found) {
-    Serial.println("❌ Target non trovato nello scan");
+    Serial.println("❌ Target non trovato nello scan breve");
     return false;
   }
 
-  if (pClient) { if (pClient->isConnected()) pClient->disconnect(); delete pClient; pClient = nullptr; }
-  pClient = BLEDevice::createClient();
-  pClient->setClientCallbacks(new MyClientCallbacks());
-
-  Serial.println("🔗 Connessione al dispositivo BLE tramite advertised device...");
+  Serial.println("🔗 Connessione tramite advertised device...");
   if (!pClient->connect(&targetDev)) {
-    Serial.println("❌ Connessione fallita");
+    Serial.println("❌ Connessione (advertised) fallita");
     return false;
   }
 
@@ -182,10 +237,9 @@ bool scanAndConnect() {
   }
 
   if (pRemoteCharacteristic->canNotify()) {
-    // piccolo respiro prima della subscribe
-    delay(150);
+    delay(120);
     pRemoteCharacteristic->registerForNotify(notifyCallback);
-    Serial.println("📡 Notifiche abilitate.");
+    Serial.println("📡 Notifiche abilitate (advertised).");
   } else {
     Serial.println("❌ La caratteristica non dichiara notify");
     pClient->disconnect();
@@ -202,14 +256,23 @@ bool scanAndConnect() {
 void setup() {
   Serial.begin(115200);
   delay(600);
-  const char* sketchName = "BLE_battery_diagnostic_n2_resilient_HS";
+  const char* sketchName = "BLE_battery_diagnostic_VM1";
   Serial.print("📄 Sketch attivo: ");
   Serial.println(sketchName);
 
-  // ADD: libera RAM del Bluetooth classico prima di inizializzare il BLE
+  // Libera RAM del Bluetooth classico prima di inizializzare il BLE
   esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
 
   BLEDevice::init("");
+
+  BLEScan* bootScan = BLEDevice::getScan();
+  bootScan->setActiveScan(true);
+  bootScan->setInterval(160);          // ~100 ms
+  bootScan->setWindow(120);            // ~75 ms
+
+  // Wi-Fi: STA + no sleep
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
 
   WiFi.begin(ssid, password);
   Serial.print("📶 Connessione WiFi");
@@ -231,42 +294,43 @@ void setup() {
   if (!scanAndConnect()) {
     Serial.println("❌ Connessione BLE iniziale fallita.");
     connected = false;
-    nextBleTryMs = millis() + 5000UL;
+    nextBleTryMs = 0; // pronto a ritentare subito
   }
 }
 
 // ---------- Loop ----------
 void loop() {
-  // watchdog
-  if (timer) timerWrite(timer, 0);
+  // watchdog come sketch diagnostic basico
+  if (timer && connected) timerWrite(timer, 0);
+
+  // Wi-Fi watchdog (ADD)
+  if (millis() >= nextWiFiCheck) { ensureWiFi(); nextWiFiCheck = millis() + WIFI_CHECK_MS; }
 
   // MQTT
   if (!client.connected()) reconnectMQTT();
   client.loop();
 
-  // Se il link fisico è caduto, aggiorna stato (evita "connesso logico")
+  // start funzioni reconnect diagnostic basic version
+
   if (connected && (!pClient || !pClient->isConnected())) {
-    Serial.println("⚠️ BLE disconnesso fisicamente, aggiorno stato");
+    Serial.println("⚠️ BLE risulta connesso logicamente, ma disconnesso a livello fisico. Forzo riconnessione.");
     connected = false;
   }
 
-  // Riconnessione BLE con backoff
-  if (!connected && millis() >= nextBleTryMs) {
-    bool ok = scanAndConnect();
-    if (ok) {
-      bleFailStreak = 0;
-    } else {
-      bleFailStreak++;
-      // ogni 3 fallimenti, reset "soft" dello stack BLE
-      if (bleFailStreak % 3 == 0) {
-        Serial.println("♻️ Soft reset stack BLE (deinit/init)");
-        BLEDevice::deinit(true);
-        delay(200);
-        BLEDevice::init("");
-      }
+  // Riconnessione BLE se necessario
+  if (!connected) {
+    Serial.println("🔁 Tentativo di riconnessione BLE...");
+    connected = scanAndConnect();
+    if (!connected) {
+      Serial.println("❌ Retry BLE fallito, reboot fra 3 min se persiste.");
     }
-    nextBleTryMs = millis() + 5000UL; // prossimo tentativo tra 5s
   }
+
+  if (connected && timer) {
+    timerWrite(timer, 0);
+  }
+
+  // End reconnect funcion diagnostic basic version
 
   // Diagnostica periodica
   if (millis() - lastDebugReport >= 30000UL) {
@@ -279,7 +343,7 @@ void loop() {
     }
     client.publish("Batteria/Duster/debug_mqtt", client.connected() ? "MQTT OK" : "MQTT DISCONNESSO");
 
-    // ---- Heap telemetry avanzata (ADD) ----
+    // ---- Heap telemetry avanzata ----
     uint32_t free8     = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     uint32_t largest8  = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     uint32_t minfree8  = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
@@ -302,7 +366,8 @@ void loop() {
     Serial.print(" | MinEver=");
     Serial.println(minfree8);
 
-    // ---- Heap-guard: solo se NON connesso (ADD) ----
+    // ---- Heap-guard DISABILITATO ----
+    /*
     if (!connected) {
       uint32_t largest8_chk = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
       if (largest8_chk < HEAP_LARGEST_GUARD) {
@@ -315,6 +380,7 @@ void loop() {
         delay(100);
       }
     }
+    */
   }
 
   delay(10);
