@@ -4,7 +4,7 @@ sensor:
         device_class: voltage
         state_class: measurement
         state: >
-         {% set raw = states('input_text.raw_battery_data') %}
+         {% set raw = states('sensor.batteria_duster_raw') %}
          {% if raw is not none and raw != 'unknown' and raw != 'unavailable' %}
            {% set parts = raw.split('-') %}
            {% if parts | length >=3 %}
@@ -17,4 +17,5 @@ sensor:
              {% else %}unknown_format{% endif %}
            {% else %}error_formato{% endif %}
          {% else %}data_not_available{% endif %}
+
 
