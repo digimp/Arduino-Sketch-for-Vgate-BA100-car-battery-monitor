@@ -330,7 +330,7 @@ void loop() {
     timerWrite(timer, 0);
   }
 
-  // End reconnect funcion diagnostic basic version
+  // End funzioni reconnect diagnostic basic version
 
   // Diagnostica periodica
   if (millis() - lastDebugReport >= 30000UL) {
