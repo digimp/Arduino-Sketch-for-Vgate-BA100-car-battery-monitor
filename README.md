@@ -14,7 +14,7 @@
 #### <a name="Introduction"><a/>Introduction
 
 Vgate BA100 is a BLE device that sends to a smartphone app hexadecimal data that app converts to Volts values. So you cannot read directly volts values 
-connecting another device or  a smartphone without the Battery Assistant App.
+connecting another device or  a smartphone without the his own Battery Assistant App.
 
 
 #### <a name="Tools"><a/>Tools
