@@ -26,7 +26,7 @@ Vgate BA100 is a BLE device that sends to its own smartphone app hexadecimal dat
 
 <img src="https://github.com/user-attachments/assets/fef98313-77f4-4b27-91f6-a5f392da9693" width="150">
 
-With these tools I've found out that changing voltage values of the power supply the hexadecimal bytes sensitive to voltage variations were the second and third. So I therefore built a spreadsheet with many tested values, integrated with other interpolated ones. This shown here is only a sample of the spreadsheet with 475 vaules from 8,5V to 16V.
+With these tools I've found out that changing voltage values of the power supply the hexadecimal bytes sensitive to voltage variations were the second and third. So I therefore built a spreadsheet with many tested values, integrated with other interpolated ones. This shown here is only a sample of the spreadsheet with 475 values from 8,5V to 16V.
 
 <img src="https://github.com/user-attachments/assets/6bf5a3c2-70aa-4bde-81f1-664015969fee" width="200">
 
