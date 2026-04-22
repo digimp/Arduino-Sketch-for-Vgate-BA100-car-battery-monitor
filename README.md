@@ -55,6 +55,7 @@ Last script uploaded , named BLE_battery_diagnostic_VM1. It was created using he
 <img src="https://github.com/user-attachments/assets/d68941f2-7ae3-49c9-8ec6-56ce7f137aa8" width="250">
 
 
+
 Update  #3
 
 A sketch with WiFi manager and other editable options
